@@ -12,7 +12,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from config import Telegram, Ai
 from database import db
 
-app = FastAPI() if os.getenv('KOYEB_APP_NAME') else None
+app = FastAPI() if os.getenv('WEBHOOK_URL') else None
 bot = Bot(token=Telegram.BOT_TOKEN)
 dp = Dispatcher()
 
@@ -156,7 +156,7 @@ async def handle_message(message: types.Message):
         await message.answer('Please send a valid YouTube link.')
 
 async def start_webhook():
-    webhook_url = f"{os.getenv('KOYEB_APP_NAME')}"
+    webhook_url = f"{os.getenv('WEBHOOK_URL')}"
     await bot.set_webhook(webhook_url)
     
     @app.get("/")
@@ -175,7 +175,7 @@ async def start_polling():
     await dp.start_polling(bot)
 
 async def main():
-    if os.getenv('KOYEB_APP_NAME'):
+    if os.getenv('WEBHOOK_URL'):
         app = await start_webhook()
         import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=8080)
