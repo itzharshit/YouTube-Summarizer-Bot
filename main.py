@@ -1,16 +1,20 @@
+from fastapi import FastAPI, Request
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 import os
 import re
 import asyncio
 import aiohttp
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pytube import YouTube
-import speech_recognition as sr
-from pydub import AudioSegment
 from youtube_transcript_api import YouTubeTranscriptApi
 from config import Telegram, Ai
 from database import db
+
+app = FastAPI() if os.getenv('KOYEB_APP_NAME') else None
+bot = Bot(token=Telegram.BOT_TOKEN)
+dp = Dispatcher()
 
 system_prompt = """
 Do NOT repeat content verbatim unless absolutely necessary.  
@@ -29,10 +33,6 @@ For song lyrics, poems, recipes, sheet music, or short creative content:
 
 Be strictly helpful, concise, and adhere to the above rules. Summarize thoroughly while staying true to the provided content without adding or omitting any topics. Do not use or mention any formatting except Telegram markdown.
 """
-
-bot = Bot(token=Telegram.BOT_TOKEN)
-dp = Dispatcher()
-recognizer = sr.Recognizer()
 
 async def get_llm_response(prompt):
     if Ai.API_KEY:
@@ -91,7 +91,7 @@ async def extract_youtube_transcript(youtube_url):
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    builder = InlineKeyboardBuilder()
+    builder = types.InlineKeyboardBuilder()
     builder.add(types.InlineKeyboardButton(
         text="View Source Code",
         url="https://github.com/Harshit-shrivastav/YouTube-Summarizer-Bot"
@@ -155,8 +155,32 @@ async def handle_message(message: types.Message):
     else:
         await message.answer('Please send a valid YouTube link.')
 
-async def main():
+async def start_webhook():
+    webhook_url = f"{os.getenv('KOYEB_APP_NAME')}"
+    await bot.set_webhook(webhook_url)
+    
+    @app.get("/")
+    async def root():
+        return {"status": "Bot is running"}
+    
+    @app.post("/webhook")
+    async def webhook(request: Request):
+        update = types.Update(**await request.json())
+        await dp.feed_webhook_update(bot, update)
+        return {"status": "ok"}
+    
+    return app
+
+async def start_polling():
     await dp.start_polling(bot)
+
+async def main():
+    if os.getenv('KOYEB_APP_NAME'):
+        app = await start_webhook()
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8080)
+    else:
+        await start_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
